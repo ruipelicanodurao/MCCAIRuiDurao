@@ -1,0 +1,276 @@
+// wordcloud-p5.js
+// Canvas: 800 x 600 | Rotação de word clouds a cada 5 segundos
+// Usa p5.js 1.x: <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+ 
+const CANVAS_W = 800;
+const CANVAS_H = 600;
+const DURACAO = 5000; // 5 segundos por cloud
+ 
+// Lista-base: todas as palavras são usadas.
+// Cada cloud recebe um subconjunto diferente e palavras são repetidas conforme necessário.
+const PALAVRAS = [
+  "PISA","education","student","students","school","schools","teacher","teachers","parent","parents",
+  "family","household","learning","teaching","assessment","questionnaire","survey","dataset","data",
+  "variable","variables","response","responses","item","items","score","scores","scoring","cognitive",
+  "cognitive items","mathematics","maths","math","reading","science","literacy","numeracy",
+  "problem solving","financial literacy","computer-based assessment","test","testing","performance",
+  "achievement","proficiency","level","levels","scale","scales","index","indices","weight","weights",
+  "sampling","sample","population","country","countries","OECD","partner country","economy","region",
+  "stratum","stratification","language","language spoken","language at home","test language",
+  "mother tongue","immigration","immigrant","immigrant status","native","foreign born","birth country",
+  "nationality","citizenship","gender","sex","male","female","age","birth","birth month","birth year",
+  "grade","grade level","education level","ISCED","primary education","lower secondary",
+  "upper secondary","post-secondary","tertiary education","vocational","vocational programme",
+  "general programme","academic programme","school type","public school","private school","public",
+  "private","independent private","government dependent private","school ownership","school size",
+  "class size","classroom","school location","urban","rural","city","town","village","municipality",
+  "municipal","regional","federal","national","international","community","socioeconomic status",
+  "SES","ESCS","cultural capital","home possessions","educational resources","books at home",
+  "computer at home","internet at home","internet access","ICT","ICT resources","digital devices",
+  "software","technology","digital literacy","parental education","parental occupation",
+  "father education","mother education","father occupation","mother occupation","parental support",
+  "parental involvement","family structure","siblings","preschool","kindergarten",
+  "early childhood education","childcare","attendance","absenteeism","truancy","late arrival",
+  "motivation","interest","enjoyment","engagement","attitude","attitudes","self-efficacy",
+  "self-concept","anxiety","perseverance","resilience","belonging","school belonging",
+  "teacher support","teacher-student relations","disciplinary climate","safety","bullying",
+  "sense of belonging","collaboration","cooperation","autonomy","responsibility","aspiration",
+  "expectations","educational expectations","career expectations","occupation expectations",
+  "future plans","time","learning time","study time","homework","homework time","lessons","tutoring",
+  "extra lessons","out-of-school lessons","paid lessons","enrichment","leisure",
+  "reading for enjoyment","reading habits","reading time","online reading","reading materials",
+  "newspapers","magazines","comics","fiction","non-fiction","books","library","library use",
+  "borrowing books","school library","teacher reading","discussion","discussion topics","diversity",
+  "equity","inclusion","disadvantage","advantage","poverty","wealth","income","resources","funding",
+  "expenditure","quality","effectiveness","efficiency","policy","programme","curriculum","syllabus",
+  "instruction","instructional time","pedagogy","assessment practices","feedback","evaluation",
+  "grading","marks","credits","repetition","grade repetition","dropout","completion","progression",
+  "transition","pathway","tracking","ability grouping","selective school","admission",
+  "admission policy","school autonomy","school management","principal","leadership","governance",
+  "accountability","staffing","teacher shortage","teacher qualification","teacher certification",
+  "professional development","teacher collaboration","induction","mentoring","appraisal",
+  "teacher appraisal","school climate","school resources","infrastructure","facilities","laboratory",
+  "computer lab","internet connection","website","extracurricular activities","clubs","sports",
+  "arts","music","volunteering","community service","work experience","apprenticeship","internship",
+  "job","employment","work","workers","occupation","unemployed","retired","student job",
+  "working while studying","hours worked","economics","finance","financial education","money",
+  "bank account","savings","credit","debt","payment","consumption","risk","insurance","investment",
+  "financial knowledge","financial behaviour","financial attitude","mathematics anxiety",
+  "mathematics self-efficacy","mathematics interest","mathematics motivation","mathematics teaching",
+  "mathematics teacher","mathematics lessons","mathematics homework","mathematics strategies",
+  "elaboration","control strategies","memorisation","effort","persistence","instrumental motivation",
+  "subject choice","course choice","science activities","science club","science fair",
+  "science museum","environmental awareness","sustainability","energy","pollution","climate",
+  "biodiversity","health","wellbeing","life satisfaction","happiness","loneliness","friendships",
+  "peer relations","peer support","social integration","social capital","trust","communication",
+  "participation","civic engagement","voting","political interest","citizenship education","values",
+  "norms","behaviour","discipline","rules","absence","punctuality","attendance rate",
+  "school engagement","school commitment","school identification","school satisfaction",
+  "teacher fairness","teacher feedback","teacher enthusiasm","classroom management",
+  "learning environment","learning strategies","metacognition","self-regulation","goal setting",
+  "planning","monitoring","reflection","critical thinking","reasoning","creativity","curiosity",
+  "open-mindedness","global competence","global awareness","intercultural understanding","respect",
+  "empathy","diversity awareness","migration","multiculturalism","foreign language","second language",
+  "English","Portuguese","mathematics performance","reading performance","science performance",
+  "plausible values","proficiency levels","benchmark","percentile","mean score","standard error",
+  "standard deviation","reliability","validity","missing values","invalid response","not reached",
+  "omitted","multiple choice","open response","coded response","response rate","weighting",
+  "replicate weights","bootstrap","imputation","plausible value","scaling","calibration",
+  "item response theory","IRT","Rasch","latent variable","construct","dimension","factor",
+  "index construction","recoding","derived variable","questionnaire item","student questionnaire",
+  "parent questionnaire","school questionnaire","teacher questionnaire","cognitive assessment",
+  "background questionnaire","data file","SPSS","syntax","metadata","documentation"
+];
+ 
+let clouds = [];
+let cloudAtual = 0;
+let ultimaTroca = 0;
+let fonte;
+ 
+function setup() {
+  createCanvas(CANVAS_W, CANVAS_H);
+  textFont("Georgia, serif");
+  angleMode(DEGREES);
+ 
+  // Cria 6 clouds temáticas diferentes.
+  // Cada uma usa palavras diferentes, mas a lista completa é aproveitada ao longo da rotação.
+  const temas = [
+    { nome: "Educação e Escolas", filtro: /school|teacher|student|education|class|learn|curricul|principal|classroom|grade|attendance|homework|lesson/i },
+    { nome: "Avaliação e Dados", filtro: /assessment|test|score|data|variable|response|questionnaire|survey|sampling|weight|scaling|SPSS|validity|reliability|item/i },
+    { nome: "Matemática e Leitura", filtro: /math|reading|literacy|numeracy|science|problem|reasoning|critical|book|library|text|language/i },
+    { nome: "Família e Contexto", filtro: /parent|family|home|household|income|wealth|poverty|sibling|immigrant|migration|birth|gender|age|language/i },
+    { nome: "Bem-estar e Motivação", filtro: /motivation|interest|anxiety|wellbeing|belonging|friendship|bullying|resilience|perseverance|confidence|satisfaction|engagement|support/i },
+    { nome: "Tecnologia e Futuro", filtro: /ICT|digital|computer|internet|technology|software|online|global|sustainab|environment|career|future|employment|work|finance/i }
+  ];
+ 
+  temas.forEach((tema, i) => {
+    let base = PALAVRAS.filter(p => tema.filtro.test(p));
+ 
+    // Garante variedade: se o tema tiver poucas correspondências, mistura com o resto.
+    if (base.length < 45) {
+      const outras = PALAVRAS.filter(p => !base.includes(p));
+      base = base.concat(shuffle(outras).slice(0, 45 - base.length));
+    }
+ 
+    // Repete palavras para encher bem o canvas.
+    let lista = [];
+    while (lista.length < 110) {
+      lista = lista.concat(shuffle(base.slice()));
+    }
+    lista = lista.slice(0, 110);
+ 
+    clouds.push(criarCloud(lista, tema.nome, i));
+  });
+ 
+  ultimaTroca = millis();
+}
+ 
+function draw() {
+  background(18, 22, 34);
+ 
+  // Troca de cloud a cada 5 segundos
+  if (millis() - ultimaTroca >= DURACAO) {
+    cloudAtual = (cloudAtual + 1) % clouds.length;
+    ultimaTroca = millis();
+  }
+ 
+  const cloud = clouds[cloudAtual];
+ 
+  // Transição suave de opacidade
+  const decorrido = millis() - ultimaTroca;
+  const alpha = decorrido < 500 ? map(decorrido, 0, 500, 0, 255) : 255;
+ 
+  desenharCloud(cloud, alpha);
+  desenharTitulo(cloud.titulo, alpha);
+  desenharIndicador();
+}
+ 
+function criarCloud(palavras, titulo, seed) {
+  randomSeed(seed * 1000 + 7);
+  const colocadas = [];
+ 
+  for (const palavra of palavras) {
+    const tentativa = tentarColocarPalavra(palavra, colocadas);
+    if (tentativa) colocadas.push(tentativa);
+  }
+ 
+  return { titulo, palavras: colocadas };
+}
+ 
+function tentarColocarPalavra(palavra, colocadas) {
+  const tamanhoBase = map(palavra.length, 3, 24, 30, 13);
+  const tamanho = random(tamanhoBase * 0.75, tamanhoBase * 1.25);
+ 
+  for (let i = 0; i < 220; i++) {
+    const x = random(70, CANVAS_W - 70);
+    const y = random(95, CANVAS_H - 55);
+    const rotacao = random() < 0.78 ? 0 : random([-90, 90]);
+    const cor = corAleatoria();
+ 
+    textSize(tamanho);
+    const w = textWidth(palavra);
+    const h = tamanho;
+ 
+    // Delimitação simples para evitar sobreposições
+    const caixa = {
+      x: x - w / 2 - 4,
+      y: y - h / 2 - 4,
+      w: w + 8,
+      h: h + 8,
+      rotacao
+    };
+ 
+    if (!colide(caixa, colocadas)) {
+      return { texto: palavra, x, y, tamanho, rotacao, cor, caixa };
+    }
+  }
+ 
+  return null;
+}
+ 
+function colide(a, lista) {
+  for (const b of lista) {
+    if (
+      a.x < b.caixa.x + b.caixa.w &&
+      a.x + a.w > b.caixa.x &&
+      a.y < b.caixa.y + b.caixa.h &&
+      a.y + a.h > b.caixa.y
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+ 
+function desenharCloud(cloud, alpha) {
+  push();
+  for (const p of cloud.palavras) {
+    push();
+    translate(p.x, p.y);
+    rotate(p.rotacao);
+    noStroke();
+    fill(red(p.cor), green(p.cor), blue(p.cor), alpha);
+    textSize(p.tamanho);
+    textAlign(CENTER, CENTER);
+    text(p.texto, 0, 0);
+    pop();
+  }
+  pop();
+}
+ 
+function desenharTitulo(titulo, alpha) {
+  push();
+  noStroke();
+  fill(235, 240, 255, alpha);
+  textSize(24);
+  textAlign(CENTER, TOP);
+  text(titulo, CANVAS_W / 2, 26);
+ 
+  stroke(90, 110, 150, alpha * 0.6);
+  strokeWeight(1);
+  line(140, 66, CANVAS_W - 140, 66);
+  pop();
+}
+ 
+function desenharIndicador() {
+  const total = clouds.length;
+  const espacamento = 18;
+  const inicioX = CANVAS_W / 2 - ((total - 1) * espacamento) / 2;
+ 
+  push();
+  noStroke();
+ 
+  for (let i = 0; i < total; i++) {
+    if (i === cloudAtual) {
+      fill(120, 190, 255);
+    } else {
+      fill(70, 85, 110);
+    }
+ 
+    circle(inicioX + i * espacamento, CANVAS_H - 22, 8);
+  }
+ 
+  pop();
+}
+ 
+function corAleatoria() {
+  const paleta = [
+    color(126, 217, 255),
+    color(255, 209, 102),
+    color(255, 138, 138),
+    color(160, 255, 189),
+    color(206, 178, 255),
+    color(255, 255, 255),
+    color(255, 177, 224)
+  ];
+  return random(paleta);
+}
+ 
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = floor(random(i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}

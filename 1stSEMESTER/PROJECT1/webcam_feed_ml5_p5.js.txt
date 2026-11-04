@@ -1,0 +1,192 @@
+let video;
+let handPose;
+let hands = [];
+let webcamReady = false;
+let detectionStarted = false;
+let webcamMessage = "A aguardar autorização da câmara...";
+const questions = [
+  "As a parent, how satisfied are you with education in Portugal up to the selected year?",
+  "How confident are you that students completing secondary school in the selected year are prepared for the future?",
+  "How hopeful do you feel about the future of education in Portugal?"
+];
+const responses = [50, 50, 50];
+ 
+function setup() {
+  createCanvas(640, 480);
+  console.log("ml5 version:", ml5.version);
+ 
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    webcamMessage = "Abre esta página em localhost ou HTTPS para usar a câmara.";
+    return;
+  }
+ 
+  video = createCapture(VIDEO);
+  video.size(640, 480);
+  video.hide();
+  video.elt.addEventListener("loadeddata", () => {
+    webcamReady = true;
+    startHandPose();
+  });
+ 
+  ml5.handPose()
+    .then((model) => {
+      handPose = model;
+      startHandPose();
+    })
+    .catch((error) => {
+      console.error("Could not load the Hand Pose model:", error);
+    });
+}
+ 
+function startHandPose() {
+  if (webcamReady && handPose && !detectionStarted) {
+    handPose.detectStart(video, gotHands);
+    detectionStarted = true;
+  }
+}
+ 
+function gotHands(results) {
+  hands = results;
+}
+ 
+function draw() {
+  background(15, 20, 32);
+ 
+  if (webcamReady) {
+    push();
+    translate(width, 0);
+    scale(-1, 1);
+    image(video, 0, 0, width, height);
+    pop();
+  }
+ 
+  updateResponsesFromFinger();
+  drawQuestionsAndBars();
+  drawWebcamMessage();
+  drawIndexFinger();
+}
+ 
+function getIndexFinger() {
+  const keypoints = hands[0]?.keypoints;
+  if (!keypoints || !keypoints[8]) {
+    return null;
+  }
+ 
+  return {
+    x: width - keypoints[8].x,
+    y: keypoints[8].y
+  };
+}
+ 
+function getCardLayout(index) {
+  const margin = 14;
+  const gap = 8;
+  const cardHeight = (height - margin * 2 - gap * 2) / questions.length;
+  const y = margin + index * (cardHeight + gap);
+  const trackX = 44;
+  const trackWidth = width - trackX * 2;
+  const trackY = y + 82;
+ 
+  return {
+    x: 16,
+    y,
+    width: width - 32,
+    height: cardHeight,
+    trackX,
+    trackY,
+    trackWidth
+  };
+}
+ 
+function updateResponsesFromFinger() {
+  const finger = getIndexFinger();
+  if (!finger) {
+    return;
+  }	
+ 
+  for (let i = 0; i < questions.length; i++) {
+    const { trackX, trackY, trackWidth } = getCardLayout(i);
+    if (
+      finger.y >= trackY - 18 &&
+      finger.y <= trackY + 28 &&
+      finger.x >= trackX &&
+      finger.x <= trackX + trackWidth
+    ) {
+      responses[i] = Math.round(
+        constrain(((finger.x - trackX) / trackWidth) * 100, 0, 100)
+      );
+      break;
+    }
+  }
+}
+ 
+function drawQuestionsAndBars() {
+  textFont("sans-serif");
+ 
+  for (let i = 0; i < questions.length; i++) {
+    const card = getCardLayout(i);
+    const fillColor = lerpColor(color(235, 91, 91), color(78, 210, 154), responses[i] / 100);
+ 
+    noStroke();
+    fill(7, 12, 25, 218);
+    rect(card.x, card.y, card.width, card.height, 14);
+ 
+    stroke(255, 255, 255, 60);
+    strokeWeight(1);
+    noFill();
+    rect(card.x, card.y, card.width, card.height, 14);
+ 
+    noStroke();
+    fill(255);
+    textSize(14);
+    textAlign(LEFT, TOP);
+    text(questions[i], card.x + 14, card.y + 13, card.width - 28, 48);
+ 
+    noStroke();
+    fill(255, 255, 255, 80);
+    rect(card.trackX, card.trackY, card.trackWidth, 14, 7);
+    fill(fillColor);
+    rect(card.trackX, card.trackY, card.trackWidth * (responses[i] / 100), 14, 7);
+ 
+    stroke(255);
+    strokeWeight(2);
+    fill(fillColor);
+    circle(card.trackX + card.trackWidth * (responses[i] / 100), card.trackY + 7, 20);
+ 
+    noStroke();
+    fill(255, 255, 255, 220);
+    textSize(11);
+    textAlign(LEFT, TOP);
+    text("Pouco", card.trackX, card.trackY + 20);
+    textAlign(RIGHT, TOP);
+    text("Muito", card.trackX + card.trackWidth, card.trackY + 20);
+    textAlign(CENTER, TOP);
+    text(`${responses[i]}%`, width / 2, card.trackY + 20);
+  }
+}
+ 
+function drawIndexFinger() {
+  const finger = getIndexFinger();
+  if (!finger) {
+    return;
+  }
+ 
+  noStroke();
+  fill(54, 220, 255, 90);
+  circle(finger.x, finger.y, 28);
+  fill(54, 220, 255);
+  circle(finger.x, finger.y, 12);
+}
+ 
+function drawWebcamMessage() {
+  if (webcamReady) {
+    return;
+  }
+ 
+  const lastCard = getCardLayout(questions.length - 1);
+  noStroke();
+  fill(255, 255, 255, 180);
+  textSize(9);
+  textAlign(LEFT, BOTTOM);
+  text(webcamMessage, lastCard.x + 14, lastCard.y + lastCard.height - 7);
+}
