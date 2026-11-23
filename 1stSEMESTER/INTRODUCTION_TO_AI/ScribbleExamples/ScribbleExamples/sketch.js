@@ -4,11 +4,11 @@ let agent
 let lastDrawTime
 
 const DRAW_INTERVAL = 2000
-const SHAPE_MARGIN = 40
+const SHAPE_MARGIN = 100
 
 class CreativeScribbleAgent {
   constructor() {
-    this.memory = { centerWidth: 0.8, centerHeight: 0.8 }
+    this.memory = { centerWidth: 0.5, centerHeight: 0.5 }
     this.shapes = ['line', 'curve', 'rectangle', 'roundedRectangle', 'ellipse', 'polygon']
   }
 
@@ -28,12 +28,23 @@ class CreativeScribbleAgent {
     }
   }
 
-  decide(perception) {
+  /*decide(perception) {
     return {
       shape: random(this.shapes),
       x: constrain(perception.mouseX, perception.left, perception.right),
       y: constrain(perception.mouseY, perception.top, perception.bottom),
       color: color(random(40, 230), random(40, 230), random(40, 230))
+    }
+  }*/
+
+  decide(perception) {
+    const shape = perception.mouseX < width / 2 ? 'line' : 'ellipse'
+
+    return {
+      shape,
+      x: constrain(perception.mouseX, perception.left, perception.right),
+      y: constrain(perception.mouseY, perception.top, perception.bottom),
+      color: color(50, 100, random(150, 255))
     }
   }
 
