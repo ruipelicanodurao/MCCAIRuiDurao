@@ -1,4 +1,5 @@
 let video;
+let handPose;
 let hands = [];
 let modelStatus = "A carregar o modelo de mãos…";
 
@@ -16,15 +17,27 @@ function setup() {
     createCanvas(windowWidth, windowHeight);
     pixelDensity(1);
 
-    video = createCapture(VIDEO, () => {
+    video = createCapture({
+        audio: false,
+        video: {
+            width: { ideal: 320 },
+            height: { ideal: 240 },
+            frameRate: { ideal: 24 }
+        }
+    }, (stream) => {
+        const track = stream?.getVideoTracks?.()[0];
+        if (track) {
+            console.log("Captura real:", track.getSettings());
+        }
         startHandPose();
     });
+
     video.hide();
 }
 
 async function startHandPose() {
     try {
-        const handPose = await ml5.handPose();
+        handPose = await ml5.handPose({ maxHands: 1 });
         if (handPose.ready) await handPose.ready;
 
         modelStatus = "A iniciar a deteção de mãos…";
@@ -43,12 +56,13 @@ function draw() {
     background(0);
 
     const camera = video?.elt;
+
     if (!camera?.videoWidth || camera.readyState < 2) {
         drawStatus("À espera da imagem da webcam…");
         return;
     }
 
-    // Mostrar a webcam em espelho.
+    // Vídeo em espelho.
     push();
     translate(width, 0);
     scale(-1, 1);
@@ -56,8 +70,10 @@ function draw() {
     pop();
 
     noStroke();
+
     fill(255, 0, 0, 80);
     rect(0, 0, width / 2, height);
+
     fill(0, 255, 0, 80);
     rect(width / 2, 0, width / 2, height);
 
@@ -71,28 +87,33 @@ function draw() {
 
     if (modelStatus) {
         drawStatus(modelStatus);
-    } else if (hands.length === 0) {
-        drawStatus("Mão não detetada. Mostra a palma à câmara.");
-    } else {
-        const openHand = hands.find(
-            (hand) => hand.keypoints?.[0] && isHandOpen(hand)
-        );
-
-        if (openHand) {
-            const wrist = canvasPosition(openHand.keypoints[0]);
-            const side = wrist.x < width / 2 ? "zona vermelha" : "zona verde";
-            drawStatus(`Mão aberta — ${side}`);
-        } else {
-            drawStatus("Mão detetada, mas não está aberta.");
-        }
+        return;
     }
+
+    const hand = hands[0];
+
+    if (!hand?.keypoints?.[0]) {
+        drawStatus("Mão não detetada. Mostra a palma à câmara.");
+        return;
+    }
+
+    if (!isHandOpen(hand)) {
+        drawStatus("Mão detetada, mas não está aberta.");
+        return;
+    }
+
+    const wrist = canvasPosition(hand.keypoints[0]);
+    const side = wrist.x < width / 2 ? "zona vermelha" : "zona verde";
+
+    drawStatus(`Mão aberta — ${side}`);
 }
 
 function canvasPosition(point) {
-    // Aplicar aos pontos o mesmo espelho usado no vídeo.
+    const camera = video.elt;
+
     return {
-        x: width - (point.x / video.elt.videoWidth) * width,
-        y: (point.y / video.elt.videoHeight) * height
+        x: width - (point.x / camera.videoWidth) * width,
+        y: (point.y / camera.videoHeight) * height
     };
 }
 
@@ -106,13 +127,16 @@ function isHandOpen(hand) {
     const wrist = points[0];
     let extended = 0;
 
-    for (const finger of FINGERS) {
-        const [base, pip, dip, tip] = finger.map((i) => points[i]);
+    for (const [base, pip, dip, tip] of FINGERS) {
+        const a = points[base];
+        const b = points[pip];
+        const c = points[dip];
+        const d = points[tip];
 
         if (
-            jointAngle(base, pip, dip) >= MIN_ANGLE &&
-            jointAngle(pip, dip, tip) >= MIN_ANGLE &&
-            distance(wrist, tip) > distance(wrist, pip)
+            jointAngle(a, b, c) >= MIN_ANGLE &&
+            jointAngle(b, c, d) >= MIN_ANGLE &&
+            pointDistance(wrist, d) > pointDistance(wrist, b)
         ) {
             extended++;
         }
@@ -137,7 +161,7 @@ function jointAngle(a, b, c) {
     return Math.acos(Math.max(-1, Math.min(1, cosine))) * 180 / Math.PI;
 }
 
-function distance(a, b) {
+function pointDistance(a, b) {
     return Math.hypot(
         a.x - b.x,
         a.y - b.y,
@@ -149,7 +173,6 @@ function drawStatus(message) {
     const boxWidth = Math.min(width - 24, 540);
 
     push();
-
     noStroke();
     fill(0, 0, 0, 190);
     rect(12, 12, boxWidth, 60, 10);
@@ -158,7 +181,6 @@ function drawStatus(message) {
     textSize(16);
     textAlign(LEFT, TOP);
     text(message, 24, 24, boxWidth - 24);
-
     pop();
 }
 
